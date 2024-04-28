@@ -1,9 +1,9 @@
-import requests
 import streamlit as st
-import sqlite3
+import requests
 import textwrap
+import sqlite3
 
-# Database setup
+# Initialize connection to database
 conn = sqlite3.connect('books.db', check_same_thread=False)
 c = conn.cursor()
 c.execute('''
@@ -22,25 +22,18 @@ def search_books(query):
         st.error(f"Failed to fetch books. Error {response.status_code}: {response.text}")
         return None
 
-# Function to format search results from Open Library
-def format_search_results(search_results):
-    books = search_results.get('docs', [])
-    formatted_books = []
-    for book in books:
-        genres = book.get('subject', [])
-        top_genres = ", ".join(genres[:5]) if genres else "No Genres Available"
-
-        book_info = {
-            'id': book.get('key', 'No ID Available').split('/')[-1],
-            'title': book.get('title', 'No Title Available'),
-            'authors': ", ".join(book.get('author_name', ['Unknown Author'])),
-            'published_date': book.get('publish_date', ['No Date Available'])[0],
-            'categories': top_genres,
-            'description': book.get('description', 'No Description Available'),  # Attempt to fetch description from API
-            'link': f"https://openlibrary.org{book.get('key', '')}"
-        }
-        formatted_books.append(book_info)
-    return formatted_books
+# Function to fetch detailed book data
+def get_book_details(book_key):
+    url = f"https://openlibrary.org{book_key}.json"
+    response = requests.get(url)
+    if response.status_code == 200:
+        book_data = response.json()
+        description = book_data.get('description')
+        if isinstance(description, dict):
+            description = description.get('value', 'No description available.')
+        return description
+    else:
+        return 'No description available.'
 
 # Streamlit interface
 st.title("Book Search and Save Tool")
@@ -50,16 +43,31 @@ search_query = st.text_input("Enter book title or author:")
 if st.button("Search"):
     search_results = search_books(search_query)
     if search_results:
-        books = format_search_results(search_results)
+        books = search_results.get('docs', [])
         for book in books:
-            st.subheader(f"{book['title']} ({book['published_date']})")
-            st.write(f"Author(s): {book['authors']}")
-            st.write(f"Genre: {book['categories']}")
-            description = textwrap.shorten(book['description'], width=250, placeholder="...") if book['description'] != 'No Description Available' else "Description not available."
-            st.write(f"Description: {description}")
-            st.write(f"[More Info]({book['link']})")
-            if st.button("Save", key=book['id']):
-                save_book(book)
+            book_key = book.get('key')
+            book_id = book_key.split('/')[-1]
+            if 'book_desc_' + book_id not in st.session_state:
+                st.session_state['book_desc_' + book_id] = 'Click "Get Description" to load'
+
+            st.subheader(f"{book.get('title', 'No Title Available')} ({book.get('publish_date', ['No Date Available'])[0]})")
+            st.markdown(f"**Author(s):** {', '.join(book.get('author_name', ['Unknown Author']))}")
+            st.markdown(f"**Genre:** {', '.join(book.get('subject', ['No Genres Available'])[:5])}")
+            desc_button = st.button("Get Description", key=book_id)
+            if desc_button:
+                st.session_state['book_desc_' + book_id] = get_book_details(book_key) or 'No description available.'
+            st.markdown(f"**Description:** {textwrap.shorten(st.session_state['book_desc_' + book_id], width=250, placeholder='...')}")
+            st.markdown(f"[More Info]({f'https://openlibrary.org{book_key}'})")
+            if st.button("Save", key=f"save_{book_id}"):
+                save_book({
+                    'id': book_id,
+                    'title': book.get('title', 'No Title Available'),
+                    'authors': ', '.join(book.get('author_name', ['Unknown Author'])),
+                    'published_date': book.get('publish_date', ['No Date Available'])[0],
+                    'categories': ', '.join(book.get('subject', ['No Genres Available'])[:5]),
+                    'description': st.session_state['book_desc_' + book_id],
+                    'link': f"https://openlibrary.org{book_key}"
+                })
                 st.success("Book saved successfully!")
 
 # Function to save books to the database
