@@ -102,17 +102,18 @@ if st.session_state['search_results']:
             save_book(book)
             st.success("Book saved successfully!")
 
-# Pagination controls
-col1, col2 = st.columns(2)
-with col1:
-    if st.button('Previous', key='prev'):
-        if st.session_state['current_page'] > 1:
-            st.session_state['current_page'] -= 1
-            st.session_state['search_results'] = search_books(search_query, st.session_state['current_page'])
-with col2:
-    if st.button('Next', key='next'):
-        st.session_state['current_page'] += 1
-        st.session_state['search_results'] = search_books(search_query, st.session_state['current_page'])
+    # Pagination controls
+    if len(books) > 0:  # Only show pagination if there are books displayed
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button('Previous', key='prev'):
+                if st.session_state['current_page'] > 1:
+                    st.session_state['current_page'] -= 1
+                    st.session_state['search_results'] = search_books(search_query, st.session_state['current_page'])
+        with col2:
+            if st.button('Next', key='next'):
+                st.session_state['current_page'] += 1
+                st.session_state['search_results'] = search_books(search_query, st.session_state['current_page'])
 
 # Function to show saved books
 if st.button("Show Saved Books"):
