@@ -4,34 +4,40 @@ import textwrap
 import sqlite3
 
 # Database setup
-conn = sqlite3.connect('books.db', check_same_thread=False)  # Add check_same_thread=False for Streamlit compatibility
+conn = sqlite3.connect('books.db', check_same_thread=False)
 c = conn.cursor()
-c.execute('''CREATE TABLE IF NOT EXISTS saved_books
-             (id TEXT PRIMARY KEY, title TEXT, author TEXT, published_date TEXT, categories TEXT, description TEXT, link TEXT)''')
+c.execute('''
+CREATE TABLE IF NOT EXISTS saved_books
+(id TEXT PRIMARY KEY, title TEXT, author TEXT, published_date TEXT, categories TEXT, description TEXT, link TEXT)
+''')
 conn.commit()
 
-# API Key setup
-API_Key = "AIzaSyAbfSW_rnPaf6vG8aNbsQ_Lsq7Ny8L6zko"
-
-# Function to search books
+# Function to search books using Open Library
 def search_books(query):
-    url = f"https://www.googleapis.com/books/v1/volumes?q={query}&key={API_Key}"
+    url = f"https://openlibrary.org/search.json?q={query}"
     response = requests.get(url)
     if response.status_code == 200:
         return response.json()
     else:
-        if response.status_code == 403:
-            st.error("Access denied due to geographic restrictions. This service may not be available in your region.")
-        else:
-            st.error(f"Failed to fetch books. Error {response.status_code}: {response.text}")
+        st.error(f"Failed to fetch books. Error {response.status_code}: {response.text}")
         return None
 
-# Function to format search results
+# Function to format search results from Open Library
 def format_search_results(search_results):
-    if 'items' in search_results:
-        return search_results['items']
-    else:
-        return []
+    books = search_results.get('docs', [])
+    formatted_books = []
+    for book in books:
+        book_info = {
+            'id': book.get('key', 'No ID Available').split('/')[-1],
+            'title': book.get('title', 'No Title Available'),
+            'authors': ", ".join(book.get('author_name', ['Unknown Author'])),
+            'published_date': book.get('publish_date', ['No Date Available'])[0],
+            'categories': ", ".join(book.get('subject', ['No Genre Available'])),
+            'description': 'No Description Available',  # Description isn't typically provided by Open Library in search results
+            'link': f"https://openlibrary.org{book.get('key', '')}"
+        }
+        formatted_books.append(book_info)
+    return formatted_books
 
 # Streamlit interface
 st.title("Book Search and Save Tool")
@@ -43,37 +49,25 @@ if st.button("Search"):
     if search_results:
         books = format_search_results(search_results)
         for book in books:
-            id = book['id']
-            volume_info = book['volumeInfo']
-            title = volume_info.get('title', 'No Title Available')
-            authors = ", ".join(volume_info.get('authors', ['Unknown Author']))
-            published_date = volume_info.get('publishedDate', 'No Date Available')[:4]
-            categories = ", ".join(volume_info.get('categories', ['No Genre Available']))
-            description = volume_info.get('description', 'No Description Available')
-            link = volume_info.get('infoLink', '#')
-
-            st.subheader(f"{title} ({published_date})")
-            st.write(f"Author(s): {authors}")
-            st.write(f"Genre: {categories}")
-            st.write(f"Description: {textwrap.shorten(description, width=250, placeholder='...')}")
-            st.write(f"[More Info]({link})")
-            if st.button("Save", key=id):
-                save_book(id)
+            st.subheader(f"{book['title']} ({book['published_date']})")
+            st.write(f"Author(s): {book['authors']}")
+            st.write(f"Genre: {book['categories']}")
+            st.write("Description: Available on detail page.")
+            st.write(f"[More Info]({book['link']})")
+            if st.button("Save", key=book['id']):
+                save_book(book)
                 st.success("Book saved successfully!")
 
 # Function to save books to the database
-def save_book(book_id):
-    url = f"https://www.googleapis.com/books/v1/volumes/{book_id}?key={API_KEY}"
-    response = requests.get(url).json()
-    book_info = response.get('volumeInfo', {})
+def save_book(book):
     book_data = (
-        book_id,
-        book_info.get('title', 'No Title Available'),
-        ", ".join(book_info.get('authors', ['Unknown Author'])),
-        book_info.get('publishedDate', 'No Date Available')[:4],
-        ", ".join(book_info.get('categories', ['No Genre Available'])),
-        book_info.get('description', 'No Description Available'),
-        book_info.get('infoLink', '#')
+        book['id'],
+        book['title'],
+        book['authors'],
+        book['published_date'],
+        book['categories'],
+        book['description'],
+        book['link']
     )
     c.execute("INSERT INTO saved_books VALUES (?, ?, ?, ?, ?, ?, ?)", book_data)
     conn.commit()
