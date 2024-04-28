@@ -1,49 +1,66 @@
+import streamlit as st
 import requests
 import textwrap
 import sqlite3
 
-conn = sqlite3.connect('books.db')
+# Database setup
+conn = sqlite3.connect('books.db', check_same_thread=False)  # Add check_same_thread=False for Streamlit compatibility
 c = conn.cursor()
-
 c.execute('''CREATE TABLE IF NOT EXISTS saved_books
              (id TEXT PRIMARY KEY, title TEXT, author TEXT, published_date TEXT, categories TEXT, description TEXT, link TEXT)''')
 conn.commit()
 
+# API Key setup
+API_KEY = "AIzaSyAbfSW_rnPaf6vG8aNbsQ_Lsq7Ny8L6zko"
+
+# Function to search books
 def search_books(query):
-    api_key = 'AIzaSyAbfSW_rnPaf6vG8aNbsQ_Lsq7Ny8L6zko'
-    url = f"https://www.googleapis.com/books/v1/volumes?q={query}&key={api_key}"
+    url = f"https://www.googleapis.com/books/v1/volumes?q={query}&key={API_KEY}"
     response = requests.get(url)
     if response.status_code == 200:
         return response.json()
     else:
-        print("Error occurred while searching for books.")
+        st.error("Error occurred while searching for books.")
         return None
 
+# Function to format search results
 def format_search_results(search_results):
-    books_list = []
     if 'items' in search_results:
-        for item in search_results['items']:
-            id = item['id']
-            volume_info = item['volumeInfo']
+        return search_results['items']
+    else:
+        return []
+
+# Streamlit interface
+st.title("Book Search and Save Tool")
+
+# Search books
+search_query = st.text_input("Enter book title or author:")
+if st.button("Search"):
+    search_results = search_books(search_query)
+    if search_results:
+        books = format_search_results(search_results)
+        for book in books:
+            id = book['id']
+            volume_info = book['volumeInfo']
             title = volume_info.get('title', 'No Title Available')
             authors = ", ".join(volume_info.get('authors', ['Unknown Author']))
             published_date = volume_info.get('publishedDate', 'No Date Available')[:4]
             categories = ", ".join(volume_info.get('categories', ['No Genre Available']))
             description = volume_info.get('description', 'No Description Available')
-
-            wrapped_description = textwrap.fill(description, width=80)
-
             link = volume_info.get('infoLink', '#')
 
-            book_info = f"ID: {id}\nTitle: {title}\nAuthor(s): {authors}\nYear: {published_date}\nGenre: {categories}\nDescription:\n{wrapped_description}\nLink: {link}\n"
-            books_list.append(book_info)
-    else:
-        books_list.append("No results found.")
-    return "\n".join(books_list)
+            st.subheader(f"{title} ({published_date})")
+            st.write(f"Author(s): {authors}")
+            st.write(f"Genre: {categories}")
+            st.write(f"Description: {textwrap.shorten(description, width=250, placeholder='...')}")
+            st.write(f"[More Info]({link})")
+            if st.button("Save", key=id):
+                save_book(id)
+                st.success("Book saved successfully!")
 
+# Function to save books to the database
 def save_book(book_id):
-    api_key = 'AIzaSyAbfSW_rnPaf6vG8aNbsQ_Lsq7Ny8L6zko'
-    url = f"https://www.googleapis.com/books/v1/volumes/{book_id}?key={api_key}"
+    url = f"https://www.googleapis.com/books/v1/volumes/{book_id}?key={API_KEY}"
     response = requests.get(url).json()
     book_info = response.get('volumeInfo', {})
     book_data = (
@@ -58,35 +75,18 @@ def save_book(book_id):
     c.execute("INSERT INTO saved_books VALUES (?, ?, ?, ?, ?, ?, ?)", book_data)
     conn.commit()
 
-def show_saved_books():
+# Function to show saved books
+if st.button("Show Saved Books"):
     c.execute("SELECT * FROM saved_books")
     saved_books = c.fetchall()
     if saved_books:
-        books_list = []
         for book in saved_books:
-            id, title, author, published_date, categories, description, link = book
-            book_info = f"ID: {id}\nTitle: {title}\nAuthor(s): {author}\nYear: {published_date}\nGenre: {categories}\nDescription:\n{textwrap.fill(description, width=80)}\nLink: {link}\n"
-            books_list.append(book_info)
-        return "\n".join(books_list)
+            st.text(f"ID: {book[0]}\nTitle: {book[1]}\nAuthor(s): {book[2]}\nYear: {book[3]}\nGenre: {book[4]}\nDescription: {textwrap.fill(book[5], width=80)}\nLink: {book[6]}\n")
     else:
-        return "No saved books."
+        st.write("No saved books.")
 
-def clear_saved_books():
+# Clear all saved books
+if st.button("Clear Saved Books"):
     c.execute("DELETE FROM saved_books")
     conn.commit()
-    print("All saved books cleared.")
-
-search_query = input("Enter book title or author: ")
-search_results = search_books(search_query)
-formatted_results = format_search_results(search_results)
-print(formatted_results)
-
-book_id = input("Enter book ID to save: ")
-save_book(book_id)
-print("Book saved.")
-
-print(show_saved_books())
-
-clear_saved_books()
-
-conn.close()
+    st.success("All saved books cleared.")
