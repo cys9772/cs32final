@@ -20,7 +20,8 @@ def search_books(query):
     if response.status_code == 200:
         return response.json()
     else:
-        st.error("Error occurred while searching for books.")
+        st.error(f"Error occurred while searching for books: Status code {response.status_code}")
+        st.text(response.text)  # Print the error response from the API
         return None
 
 # Function to format search results
