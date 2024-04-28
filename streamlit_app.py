@@ -81,7 +81,7 @@ if st.session_state['search_results']:
     for book in books:
         st.subheader(f"{book['title']} ({book['published_date']})")
         st.markdown(f"**Author(s):** {book['authors']}")
-        st.markown(f"**Genre:** {book['categories']}")
+        st.markdown(f"**Genre:** {book['categories']}")
         st.markdown(f"**Description:** {textwrap.shorten(book['description'], width=250, placeholder='...')}")
         st.markdown(f"[More Info]({book['link']})")
         if st.button("Save", key=book['id']):
