@@ -12,6 +12,20 @@ CREATE TABLE IF NOT EXISTS saved_books
 ''')
 conn.commit()
 
+# Function to save books to the database
+def save_book(book):
+    book_data = (
+        book['id'],
+        book['title'],
+        book['authors'],
+        book['published_date'],
+        book['categories'],
+        book['description'],
+        book['link']
+    )
+    c.execute("INSERT INTO saved_books VALUES (?, ?, ?, ?, ?, ?, ?)", book_data)
+    conn.commit()
+
 # Constants
 RESULTS_PER_PAGE = 10  # Number of results per page
 
@@ -99,20 +113,6 @@ with col2:
     if st.button('Next', key='next'):
         st.session_state['current_page'] += 1
         st.session_state['search_results'] = search_books(search_query, st.session_state['current_page'])
-
-# Function to save books to the database
-def save_book(book):
-    book_data = (
-        book['id'],
-        book['title'],
-        book['authors'],
-        book['published_date'],
-        book['categories'],
-        book['description'],
-        book['link']
-    )
-    c.execute("INSERT INTO saved_books VALUES (?, ?, ?, ?, ?, ?, ?)", book_data)
-    conn.commit()
 
 # Function to show saved books
 if st.button("Show Saved Books"):
