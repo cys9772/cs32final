@@ -12,9 +12,12 @@ CREATE TABLE IF NOT EXISTS saved_books
 ''')
 conn.commit()
 
+# Constants
+RESULTS_PER_PAGE = 10  # Number of results per page
+
 # Function to search books using Open Library
-def search_books(query):
-    url = f"https://openlibrary.org/search.json?q={query}"
+def search_books(query, page=1):
+    url = f"https://openlibrary.org/search.json?q={query}&page={page}"
     response = requests.get(url)
     if response.status_code == 200:
         return response.json()
@@ -39,7 +42,7 @@ def get_book_details(book_key):
 def format_search_results(search_results):
     books = search_results.get('docs', [])
     formatted_books = []
-    for book in books:
+    for book in books[:RESULTS_PER_PAGE]:  # Limit results processed to RESULTS_PER_PAGE
         book_key = book.get('key')
         genres = book.get('subject', [])
         top_genres = ", ".join(genres[:5]) if genres else "No Genres Available"
@@ -63,8 +66,10 @@ st.title("Book Search and Save Tool")
 
 # Search books
 search_query = st.text_input("Enter book title or author:")
+page_number = st.number_input("Page", min_value=1, value=1, step=1)  # Pagination control
+
 if st.button("Search"):
-    search_results = search_books(search_query)
+    search_results = search_books(search_query, page=page_number)
     if search_results:
         books = format_search_results(search_results)
         for book in books:
