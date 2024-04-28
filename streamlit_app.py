@@ -15,6 +15,12 @@ conn.commit()
 # Constants
 RESULTS_PER_PAGE = 10  # Number of results per page
 
+# Initialize session state variables if not already present
+if 'search_results' not in st.session_state:
+    st.session_state['search_results'] = None
+if 'current_page' not in st.session_state:
+    st.session_state['current_page'] = 1
+
 # Function to search books using Open Library
 def search_books(query, page=1):
     url = f"https://openlibrary.org/search.json?q={query}&page={page}"
@@ -65,22 +71,34 @@ def format_search_results(search_results):
 st.title("Book Search and Save Tool")
 
 # Search books
-search_query = st.text_input("Enter book title or author:")
-page_number = st.number_input("Page", min_value=1, value=1, step=1)  # Pagination control
+search_query = st.text_input("Enter book title or author:", key='search')
+if st.button("Search", key='search_button'):
+    st.session_state['search_results'] = search_books(search_query, st.session_state['current_page'])
 
-if st.button("Search"):
-    search_results = search_books(search_query, page=page_number)
-    if search_results:
-        books = format_search_results(search_results)
-        for book in books:
-            st.subheader(f"{book['title']} ({book['published_date']})")
-            st.markdown(f"**Author(s):** {book['authors']}")
-            st.markdown(f"**Genre:** {book['categories']}")
-            st.markdown(f"**Description:** {textwrap.shorten(book['description'], width=250, placeholder='...')}")
-            st.markdown(f"[More Info]({book['link']})")
-            if st.button("Save", key=book['id']):
-                save_book(book)
-                st.success("Book saved successfully!")
+# Display results
+if st.session_state['search_results']:
+    books = format_search_results(st.session_state['search_results'])
+    for book in books:
+        st.subheader(f"{book['title']} ({book['published_date']})")
+        st.markdown(f"**Author(s):** {book['authors']}")
+        st.markown(f"**Genre:** {book['categories']}")
+        st.markdown(f"**Description:** {textwrap.shorten(book['description'], width=250, placeholder='...')}")
+        st.markdown(f"[More Info]({book['link']})")
+        if st.button("Save", key=book['id']):
+            save_book(book)
+            st.success("Book saved successfully!")
+
+# Pagination controls
+col1, col2 = st.columns(2)
+with col1:
+    if st.button('Previous', key='prev'):
+        if st.session_state['current_page'] > 1:
+            st.session_state['current_page'] -= 1
+            st.session_state['search_results'] = search_books(search_query, st.session_state['current_page'])
+with col2:
+    if st.button('Next', key='next'):
+        st.session_state['current_page'] += 1
+        st.session_state['search_results'] = search_books(search_query, st.session_state['current_page'])
 
 # Function to save books to the database
 def save_book(book):
