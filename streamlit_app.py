@@ -43,20 +43,16 @@ def format_search_results(search_results):
         book_key = book.get('key')
         genres = book.get('subject', [])
         top_genres = ", ".join(genres[:5]) if genres else "No Genres Available"
-
-        # Attempt to fetch description from API if not present in initial search
-        description = book.get('description')
-        if not description:
-            description = get_book_details(book_key)  # Fetch more detailed description
-
+        
         book_info = {
             'id': book_key.split('/')[-1],
             'title': book.get('title', 'No Title Available'),
             'authors': ", ".join(book.get('author_name', ['Unknown Author'])),
             'published_date': book.get('publish_date', ['No Date Available'])[0],
             'categories': top_genres,
-            'description': description,
-            'link': f"https://openlibrary.org{book_key}"
+            'description': 'Click "Get Description" to load',  # Placeholder text
+            'link': f"https://openlibrary.org{book_key}",
+            'key': book_key  # Store the key for fetching details
         }
         formatted_books.append(book_info)
     return formatted_books
@@ -72,11 +68,14 @@ if st.button("Search"):
         books = format_search_results(search_results)
         for book in books:
             st.subheader(f"{book['title']} ({book['published_date']})")
-            st.write(f"Author(s): {book['authors']}")
-            st.write(f"Genre: {book['categories']}")
-            description = textwrap.shorten(book['description'], width=250, placeholder="...") if book['description'] != 'No Description Available' else "Description not available."
-            st.write(f"Description: {description}")
-            st.write(f"[More Info]({book['link']})")
+            st.markdown(f"**Author(s):** {book['authors']}")
+            st.markdown(f"**Genre:** {book['categories']}")
+            if st.button("Get Description", key=f"desc_{book['id']}"):
+                description = get_book_details(book['key'])
+                st.markdown(f"**Description:** {textwrap.shorten(description, width=250, placeholder='...')}")
+            else:
+                st.markdown("**Description:** Click 'Get Description' to load")
+            st.markdown(f"[More Info]({book['link']})")
             if st.button("Save", key=book['id']):
                 save_book(book)
                 st.success("Book saved successfully!")
@@ -89,7 +88,7 @@ def save_book(book):
         book['authors'],
         book['published_date'],
         book['categories'],
-        book['description'],
+        book['description'] if 'description' in book else 'No description available.',
         book['link']
     )
     c.execute("INSERT INTO saved_books VALUES (?, ?, ?, ?, ?, ?, ?)", book_data)
