@@ -11,11 +11,11 @@ c.execute('''CREATE TABLE IF NOT EXISTS saved_books
 conn.commit()
 
 # API Key setup
-API_KEY = "AIzaSyAbfSW_rnPaf6vG8aNbsQ_Lsq7Ny8L6zko"
+API_Key = "AIzaSyAbfSW_rnPaf6vG8aNbsQ_Lsq7Ny8L6zko"
 
 # Function to search books
 def search_books(query):
-    url = f"https://www.googleapis.com/books/v1/volumes?q={query}&key={API_KEY}"
+    url = f"https://www.googleapis.com/books/v1/volumes?q={query}&key={API_Key}"
     response = requests.get(url)
     if response.status_code == 200:
         return response.json()
