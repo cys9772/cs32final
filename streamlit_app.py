@@ -1,7 +1,7 @@
-import requests
 import streamlit as st
-import sqlite3
+import requests
 import textwrap
+import sqlite3
 
 # Database setup
 conn = sqlite3.connect('books.db', check_same_thread=False)
@@ -22,22 +22,41 @@ def search_books(query):
         st.error(f"Failed to fetch books. Error {response.status_code}: {response.text}")
         return None
 
+# Function to fetch detailed book data
+def get_book_details(book_key):
+    url = f"https://openlibrary.org{book_key}.json"
+    response = requests.get(url)
+    if response.status_code == 200:
+        book_data = response.json()
+        description = book_data.get('description')
+        if isinstance(description, dict):
+            description = description.get('value', 'No description available.')
+        return description
+    else:
+        return 'No description available.'
+
 # Function to format search results from Open Library
 def format_search_results(search_results):
     books = search_results.get('docs', [])
     formatted_books = []
     for book in books:
+        book_key = book.get('key')
         genres = book.get('subject', [])
         top_genres = ", ".join(genres[:5]) if genres else "No Genres Available"
 
+        # Attempt to fetch description from API if not present in initial search
+        description = book.get('description')
+        if not description:
+            description = get_book_details(book_key)  # Fetch more detailed description
+
         book_info = {
-            'id': book.get('key', 'No ID Available').split('/')[-1],
+            'id': book_key.split('/')[-1],
             'title': book.get('title', 'No Title Available'),
             'authors': ", ".join(book.get('author_name', ['Unknown Author'])),
             'published_date': book.get('publish_date', ['No Date Available'])[0],
             'categories': top_genres,
-            'description': book.get('description', 'No Description Available'),  # Attempt to fetch description from API
-            'link': f"https://openlibrary.org{book.get('key', '')}"
+            'description': description,
+            'link': f"https://openlibrary.org{book_key}"
         }
         formatted_books.append(book_info)
     return formatted_books
