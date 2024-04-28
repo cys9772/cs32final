@@ -20,8 +20,11 @@ def search_books(query):
     if response.status_code == 200:
         return response.json()
     else:
-        st.error(f"Error occurred while searching for books: Status code {response.status_code}")
-        st.text(response.text)  # Print the error response from the API
+        st.error("Failed to fetch books.")
+        if response.status_code == 403:
+            st.error("Access is denied due to geographic restrictions.")
+        else:
+            st.error(f"Error {response.status_code}: {response.json().get('message', 'No additional error information available.')}")
         return None
 
 # Function to format search results
