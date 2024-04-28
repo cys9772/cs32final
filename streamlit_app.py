@@ -1,7 +1,7 @@
-import streamlit as st
 import requests
-import textwrap
+import streamlit as st
 import sqlite3
+import textwrap
 
 # Database setup
 conn = sqlite3.connect('books.db', check_same_thread=False)
@@ -27,13 +27,16 @@ def format_search_results(search_results):
     books = search_results.get('docs', [])
     formatted_books = []
     for book in books:
+        genres = book.get('subject', [])
+        top_genres = ", ".join(genres[:5]) if genres else "No Genres Available"
+
         book_info = {
             'id': book.get('key', 'No ID Available').split('/')[-1],
             'title': book.get('title', 'No Title Available'),
             'authors': ", ".join(book.get('author_name', ['Unknown Author'])),
             'published_date': book.get('publish_date', ['No Date Available'])[0],
-            'categories': ", ".join(book.get('subject', ['No Genre Available'])),
-            'description': 'No Description Available',  # Description isn't typically provided by Open Library in search results
+            'categories': top_genres,
+            'description': book.get('description', 'No Description Available'),  # Attempt to fetch description from API
             'link': f"https://openlibrary.org{book.get('key', '')}"
         }
         formatted_books.append(book_info)
@@ -52,7 +55,8 @@ if st.button("Search"):
             st.subheader(f"{book['title']} ({book['published_date']})")
             st.write(f"Author(s): {book['authors']}")
             st.write(f"Genre: {book['categories']}")
-            st.write("Description: Available on detail page.")
+            description = textwrap.shorten(book['description'], width=250, placeholder="...") if book['description'] != 'No Description Available' else "Description not available."
+            st.write(f"Description: {description}")
             st.write(f"[More Info]({book['link']})")
             if st.button("Save", key=book['id']):
                 save_book(book)
