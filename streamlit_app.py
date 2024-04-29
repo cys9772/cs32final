@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import textwrap
 import sqlite3
-from collections import Counter
 
 # Set page config
 st.set_page_config(page_title="Open Library Search", layout="wide")
@@ -49,8 +48,10 @@ def get_book_details(book_key):
         description = book_data.get('description', 'No description available.')
         if isinstance(description, dict):
             description = description.get('value', 'No description available.')
-        return textwrap.fill(description, width=80)
-    return 'No description available.'
+        cover_id = book_data.get('covers', [])[0] if book_data.get('covers', []) else None
+        cover_url = f"https://covers.openlibrary.org/b/id/{cover_id}-M.jpg" if cover_id else "https://via.placeholder.com/128x193?text=No+Cover"
+        return textwrap.fill(description, width=80), cover_url
+    return 'No description available.', "https://via.placeholder.com/128x193?text=No+Cover"
 
 # Function to search books using Open Library API
 @st.cache(show_spinner=False, ttl=3600)  # Cache results for 1 hour
@@ -70,42 +71,32 @@ if st.button("Search"):
 # Display search results and handle pagination and filtering
 if 'search_results' in st.session_state and st.session_state.search_results:
     books = st.session_state.search_results['docs']
-    genre_options = sorted(set(g for book in books for g in book.get('subject', [])))
-    author_options = sorted(set(a.lower() for book in books for a in book.get('author_name', [])))
-    years = sorted(set(y for book in books for y in book.get('publish_year', [])))
-
-    selected_genres = st.multiselect("Filter by Genre", options=genre_options)
-    selected_authors = st.multiselect("Filter by Author", options=author_options)
-    year_range = st.slider("Filter by Year Range", int(min(years)), int(max(years)), (int(min(years)), int(max(years))))
-
-    if selected_genres:
-        books = [book for book in books if set(book.get('subject', [])).intersection(selected_genres)]
-    if selected_authors:
-        books = [book for book in books if set(a.lower() for a in book.get('author_name', [])).intersection(set(selected_authors))]
-    books = [book for book in books if year_range[0] <= int(book.get('first_publish_year', year_range[0])) <= year_range[1]]
-
     page = st.session_state.page
     start_index = (page - 1) * 10
     end_index = start_index + 10
     displayed_books = books[start_index:end_index]
 
     for book in displayed_books:
-        st.subheader(f"{book['title']} ({book.get('first_publish_year', 'No Date Available')})")
-        st.markdown(f"**Author(s):** {', '.join(book.get('author_name', ['Unknown Author']))}")
-        st.markdown(f"**Genre:** {', '.join(book.get('subject', [])[:5])}")
-        description = get_book_details(book['key'])
-        st.markdown(f"**Description:** {description}")
-        st.markdown(f"[More Info](https://openlibrary.org{book['key']})")
-        if st.button("Save", key=f"save_{book['key']}"):
-            save_book({
-                'id': book['key'].split('/')[-1],
-                'title': book['title'],
-                'authors': ', '.join(book.get('author_name', [])),
-                'published_date': book.get('first_publish_year', 'No Date Available'),
-                'categories': book.get('subject', []),
-                'description': description,
-                'link': f"https://openlibrary.org{book['key']}"
-            })
+        col1, col2 = st.columns([1, 3])
+        description, cover_url = get_book_details(book['key'])
+        with col1:
+            st.image(cover_url, width=128)
+        with col2:
+            st.subheader(f"{book['title']} ({book.get('first_publish_year', 'No Date Available')})")
+            st.markdown(f"**Author(s):** {', '.join(book.get('author_name', ['Unknown Author']))}")
+            st.markdown(f"**Genre:** {', '.join(book.get('subject', [])[:5])}")
+            st.markdown(f"**Description:** {description}")
+            st.markdown(f"[More Info](https://openlibrary.org{book['key']})")
+            if st.button("Save", key=f"save_{book['key']}"):
+                save_book({
+                    'id': book['key'].split('/')[-1],
+                    'title': book['title'],
+                    'authors': ', '.join(book.get('author_name', [])),
+                    'published_date': book.get('first_publish_year', 'No Date Available'),
+                    'categories': book.get('subject', []),
+                    'description': description,
+                    'link': f"https://openlibrary.org{book['key']}"
+                })
 
     # Pagination buttons
     col1, col2 = st.columns(2)
