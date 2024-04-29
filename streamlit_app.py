@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 import textwrap
 import sqlite3
+from collections import Counter
 
 # Database setup
 conn = sqlite3.connect('books.db', check_same_thread=False)
@@ -27,29 +28,41 @@ def search_books(query, author=None, genre=None, year=None):
     response = requests.get(url)
     return response.json() if response.status_code == 200 else None
 
+# Function to fetch detailed book data
+def get_book_details(book_key):
+    url = f"https://openlibrary.org{book_key}.json"
+    response = requests.get(url)
+    if response.status_code == 200:
+        book_data = response.json()
+        description = book_data.get('description', 'No description available.')
+        if isinstance(description, dict):
+            description = description.get('value', 'No description available.')
+        return description
+    return 'No description available.'
+
 # Function to format the search results for display
 def format_search_results(search_results):
     if not search_results or 'docs' not in search_results:
-        return [], [], []
+        return [], []
 
+    genre_count = Counter()
     books_list = []
-    genres = set()
-    years = set()
     for item in search_results['docs']:
         book_info = {
-            'id': item.get('key', '').split('/')[-1],
+            'key': item.get('key', ''),
             'title': item.get('title', 'No Title Available'),
             'authors': ", ".join(item.get('author_name', ['Unknown Author'])),
             'published_date': item.get('publish_year', ['No Date Available'])[0],
-            'categories': ", ".join(item.get('subject', ['No Genre Available'])),
-            'description': textwrap.fill(item.get('description', 'No Description Available'), width=80),
+            'categories': item.get('subject', ['No Genre Available']),
+            'description': 'Click "Get Description" to load',
             'link': f"https://openlibrary.org{item.get('key', '')}"
         }
         books_list.append(book_info)
-        genres.update(item.get('subject', []))
-        years.update(str(year) for year in item.get('publish_year', []))
+        genre_count.update(book_info['categories'])
 
-    return books_list, sorted(list(genres)), sorted(list(years))
+    # Select the top 5 most common genres
+    most_common_genres = [genre for genre, count in genre_count.most_common(5)]
+    return books_list, most_common_genres
 
 # Streamlit interface for book search
 st.title("Open Library Search and Save Tool")
@@ -62,31 +75,37 @@ year = st.text_input("Publication Year (optional):")
 
 if st.button("Search"):
     search_results = search_books(query, author, genre, year)
-    books, available_genres, available_years = format_search_results(search_results)
+    books, most_common_genres = format_search_results(search_results)
+    st.write(f"Top 5 Genres: {', '.join(most_common_genres)}")
     if books:
         for book in books:
             st.subheader(f"{book['title']} ({book['published_date']})")
             st.markdown(f"**Author(s):** {book['authors']}")
-            st.markdown(f"**Genre:** {book['categories']}")
-            st.markdown(f"**Description:** {book['description']}")
+            st.markdown(f"**Genre:** {', '.join([genre for genre in book['categories'] if genre in most_common_genres])}")
+            if st.button("Get Description", key=book['key']):
+                description = get_book_details(book['key'])
+                book['description'] = description
+                st.markdown(f"**Description:** {textwrap.shorten(description, width=250, placeholder='...')}")
+            else:
+                st.markdown("**Description:** Click 'Get Description' to load")
             st.markdown(f"[More Info]({book['link']})")
-            if st.button("Save", key=book['id']):
-                save_book(book['id'])
-                st.success("Book saved successfully!")
+            if st.button("Save", key='save_' + book['key']):
+                save_book(book)
 
 # Function to save a selected book to the database
-def save_book(book_id):
+def save_book(book):
     book_data = (
-        book_id,
+        book['key'].split('/')[-1],
         book['title'],
         book['authors'],
         book['published_date'],
-        book['categories'],
+        ", ".join(book['categories']),
         book['description'],
         book['link']
     )
     c.execute("INSERT INTO saved_books VALUES (?, ?, ?, ?, ?, ?, ?)", book_data)
     conn.commit()
+    st.success("Book saved successfully!")
 
 # Display saved books
 if st.button("Show Saved Books"):
