@@ -9,8 +9,10 @@ st.set_page_config(page_title="Open Library Search", layout="wide")
 # Database setup
 conn = sqlite3.connect('books.db', check_same_thread=False)
 c = conn.cursor()
+
+# Ensure the table schema is updated by dropping and recreating if needed
+c.execute('DROP TABLE IF EXISTS saved_books;')
 c.execute('''
-DROP TABLE IF EXISTS saved_books;  # Ensure the table schema is updated
 CREATE TABLE saved_books
 (id TEXT PRIMARY KEY, title TEXT, author TEXT, published_date TEXT, categories TEXT, description TEXT, link TEXT, image_url TEXT)
 ''')
