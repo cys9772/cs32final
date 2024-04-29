@@ -30,6 +30,7 @@ def search_books(query, author=None, genre=None, year=None):
 
 # Function to fetch detailed book data including description and publish date
 # Function to fetch detailed book data including description and publish date
+# Function to fetch detailed book data including description and publish date
 def get_book_details(book_key):
     url = f"https://openlibrary.org{book_key}.json"
     response = requests.get(url)
@@ -39,10 +40,13 @@ def get_book_details(book_key):
         if isinstance(description, dict):
             description = description.get('value', 'No description available.')
 
-        # Extracting the 'publish_date' field from the detailed book data.
+        # Attempt to get the most accurate publish date
         publish_date = book_data.get('publish_date', 'No publish date available.')
-        if isinstance(publish_date, list):
-            publish_date = publish_date[0]  # Taking the first publish date if it's a list
+        if not publish_date:  # If publish_date wasn't found, try alternative methods
+            editions = book_data.get('editions', [])
+            if editions:
+                # Try getting the publish_date from the first edition's data
+                publish_date = editions[0].get('publish_date', 'No publish date available.')
 
         return description, publish_date
     return 'No description available.', 'No publish date available.'
