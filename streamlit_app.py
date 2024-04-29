@@ -1,5 +1,3 @@
-
-
 import streamlit as st
 import requests
 import textwrap
@@ -21,7 +19,6 @@ conn.commit()
 # Function to save a selected book to the database
 def save_book(book):
     try:
-        # Check if the book already exists in the database
         c.execute("SELECT id FROM saved_books WHERE id = ?", (book['id'],))
         exists = c.fetchone()
         if not exists:
@@ -57,40 +54,36 @@ def get_book_details(book_key):
 
 # Function to search books using Open Library API
 @st.cache(show_spinner=False, ttl=3600)  # Cache results for 1 hour
-def search_books(query, author=None, genre=None, year=None, page=1):
-    query_parts = [query]
-    if author:
-        query_parts.append(f"author:{author}")
-    if genre:
-        query_parts.append(f"subject:{genre}")
-    if year:
-        query_parts.append(f"date:{year}")
-
-    query_string = '+'.join(query_parts)
-    url = f"https://openlibrary.org/search.json?q={query_string}&page={page}"
+def search_books(query, page=1):
+    url = f"https://openlibrary.org/search.json?q={query}&page={page}"
     response = requests.get(url)
     return response.json() if response.status_code == 200 else None
 
-# Streamlit interface for book search and filtering
+# Streamlit interface for book search
 st.title("Open Library Search and Save Tool")
 query = st.text_input("Enter a book title or keyword:")
-author = st.text_input("Author (optional):")
-genre = st.text_input("Genre (optional):")
-year = st.text_input("Publication Year (optional):")
 
 if st.button("Search"):
-    st.session_state.search_results = search_books(query, author, genre, year, 1)
-    st.session_state.page = 1
+    st.session_state.search_results = search_books(query, 1)
+    st.session_state.page = 1  # Reset to first page when new search is performed
 
 # Display search results and handle pagination and filtering
 if 'search_results' in st.session_state and st.session_state.search_results:
     books = st.session_state.search_results['docs']
-    all_genres = Counter([g for book in books for g in book.get('subject', [])])
-    top_global_genres = [genre for genre, count in all_genres.most_common(10)]
-    
-    selected_genre = st.selectbox("Filter by Genre", ["All"] + top_global_genres)
+    genre_options = list(set(g for book in books for g in book.get('subject', [])))
+    author_options = list(set(a for book in books for a in book.get('author_name', [])))
+    years_options = list(set(str(y) for book in books for y in book.get('publish_year', [])))
+
+    selected_genre = st.selectbox("Filter by Genre", ["All"] + sorted(genre_options))
+    selected_author = st.selectbox("Filter by Author", ["All"] + sorted(author_options))
+    selected_year = st.selectbox("Filter by Year", ["All"] + sorted(years_options, reverse=True))
+
     if selected_genre != "All":
         books = [book for book in books if selected_genre in book.get('subject', [])]
+    if selected_author != "All":
+        books = [book for book in books if selected_author in book.get('author_name', [])]
+    if selected_year != "All":
+        books = [book for book in books if selected_year in str(book.get('first_publish_year', ''))]
 
     page = st.session_state.page
     start_index = (page - 1) * 10
@@ -124,7 +117,7 @@ if 'search_results' in st.session_state and st.session_state.search_results:
         if end_index < len(books) and st.button("Next Page"):
             st.session_state.page += 1
 
-# Display saved books
+# Display and manage saved books
 if st.button("Show Saved Books"):
     c.execute("SELECT * FROM saved_books")
     saved_books = c.fetchall()
@@ -134,7 +127,6 @@ if st.button("Show Saved Books"):
     else:
         st.write("No saved books.")
 
-# Clear all saved books
 if st.button("Clear All Saved Books"):
     c.execute("DELETE FROM saved_books")
     conn.commit()
