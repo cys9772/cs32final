@@ -65,25 +65,20 @@ query = st.text_input("Enter a book title or keyword:")
 
 if st.button("Search"):
     st.session_state.search_results = search_books(query, 1)
-    st.session_state.page = 1  # Reset to first page when new search is performed
+    st.session_state.page = 1
 
 # Display search results and handle pagination and filtering
 if 'search_results' in st.session_state and st.session_state.search_results:
     books = st.session_state.search_results['docs']
     genre_options = list(set(g for book in books for g in book.get('subject', [])))
-    author_options = list(set(a for book in books for a in book.get('author_name', [])))
-    years_options = list(set(str(y) for book in books for y in book.get('publish_year', [])))
+    years = sorted(set(y for book in books for y in book.get('publish_year', [])))
 
-    selected_genre = st.selectbox("Filter by Genre", ["All"] + sorted(genre_options))
-    selected_author = st.selectbox("Filter by Author", ["All"] + sorted(author_options))
-    selected_year = st.selectbox("Filter by Year", ["All"] + sorted(years_options, reverse=True))
+    selected_genres = st.multiselect("Filter by Genre", options=genre_options)
+    year_range = st.slider("Filter by Year Range", int(min(years)), int(max(years)), (int(min(years)), int(max(years))))
 
-    if selected_genre != "All":
-        books = [book for book in books if selected_genre in book.get('subject', [])]
-    if selected_author != "All":
-        books = [book for book in books if selected_author in book.get('author_name', [])]
-    if selected_year != "All":
-        books = [book for book in books if selected_year in str(book.get('first_publish_year', ''))]
+    if selected_genres:
+        books = [book for book in books if any(g in selected_genres for g in book.get('subject', []))]
+    books = [book for book in books if year_range[0] <= int(book.get('first_publish_year', year_range[0])) <= year_range[1]]
 
     page = st.session_state.page
     start_index = (page - 1) * 10
