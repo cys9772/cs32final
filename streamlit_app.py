@@ -4,6 +4,9 @@ import textwrap
 import sqlite3
 from collections import Counter
 
+# Set page config
+st.set_page_config(page_title="Open Library Search", layout="wide")
+
 # Database setup
 conn = sqlite3.connect('books.db', check_same_thread=False)
 c = conn.cursor()
@@ -15,27 +18,7 @@ conn.commit()
 
 # Initialize session state for pagination and search results
 if 'page' not in st.session_state:
-    st.session_state['page'] = 1
-if 'search_results' not in st.session_state:
-    st.session_state['search_results'] = None
-if 'search_triggered' not in st.session_state:
-    st.session_state['search_triggered'] = False
-
-# Function to search books using Open Library API
-@st.experimental_memo
-def search_books(query, author=None, genre=None, year=None, page=1):
-    query_parts = [query]
-    if author:
-        query_parts.append(f"author:{author}")
-    if genre:
-        query_parts.append(f"subject:{genre}")
-    if year:
-        query_parts.append(f"date:{year}")
-
-    query_string = '+'.join(query_parts)
-    url = f"https://openlibrary.org/search.json?q={query_string}&page={page}"
-    response = requests.get(url)
-    return response.json() if response.status_code == 200 else None
+    st.session_state.page = 1
 
 # Function to format the search results for display
 def format_search_results(search_results):
@@ -46,8 +29,9 @@ def format_search_results(search_results):
     books_list = []
     for item in search_results['docs']:
         book_key = item.get('key', '')
+        description, publish_date = get_book_details(book_key)  # Fetching description immediately
         publish_year = item.get('publish_year', [])
-        published_date = str(min(publish_year)) if publish_year else "No Date Available"
+        published_date = min(publish_year) if publish_year else "No Date Available"
 
         book_info = {
             'key': book_key,
@@ -56,7 +40,7 @@ def format_search_results(search_results):
             'authors': ", ".join(item.get('author_name', ['Unknown Author'])),
             'published_date': published_date,
             'categories': item.get('subject', ['No Genre Available']),
-            'description': 'Click "Get Description" to load',
+            'description': textwrap.fill(description, width=80),
             'link': f"https://openlibrary.org{book_key}"
         }
         books_list.append(book_info)
@@ -64,50 +48,6 @@ def format_search_results(search_results):
 
     most_common_genres = [genre for genre, count in genre_count.most_common(5)]
     return books_list, most_common_genres
-
-# Streamlit interface for book search
-st.title("Open Library Search and Save Tool")
-
-# Search inputs
-query = st.text_input("Enter a book title or keyword:")
-author = st.text_input("Author (optional):")
-genre = st.text_input("Genre (optional):")
-year = st.text_input("Publication Year (optional):")
-
-# Search action
-if st.button("Search"):
-    st.session_state['search_results'] = search_books(query, author, genre, year, st.session_state['page'])
-    st.session_state['search_triggered'] = True
-    st.session_state['page'] = 1  # Reset to first page
-
-# Display search results and pagination buttons only if search has been triggered
-if st.session_state['search_triggered'] and st.session_state['search_results']:
-    books, most_common_genres = format_search_results(st.session_state['search_results'])
-    st.write(f"Top 5 Genres: {', '.join(most_common_genres)}")
-
-    for book in books:
-        st.subheader(f"{book['title']} ({book['published_date']})")
-        st.markdown(f"**Author(s):** {book['authors']}")
-        st.markdown(f"**Genre:** {', '.join([genre for genre in book['categories'] if genre in most_common_genres])}")
-        if st.button("Get Description", key='desc_'+book['id']):
-            book['description'], _ = get_book_details(book['key'])
-        st.markdown(f"**Description:** {book['description']}")
-        st.markdown(f"[More Info]({book['link']})")
-        if st.button("Save", key='save_'+book['id']):
-            save_book(book)
-            st.success("Book saved successfully!")
-
-    # Pagination buttons
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("Previous"):
-            if st.session_state['page'] > 1:
-                st.session_state['page'] -= 1
-                st.session_state['search_results'] = search_books(query, author, genre, year, st.session_state['page'])
-    with col2:
-        if st.button("Next"):
-            st.session_state['page'] += 1
-            st.session_state['search_results'] = search_books(query, author, genre, year, st.session_state['page'])
 
 # Function to save a selected book to the database
 def save_book(book):
@@ -123,7 +63,60 @@ def save_book(book):
     c.execute("INSERT INTO saved_books VALUES (?, ?, ?, ?, ?, ?, ?)", book_data)
     conn.commit()
 
-# Display saved books
+# Function to get book details from Open Library API
+def get_book_details(book_key):
+    url = f"https://openlibrary.org{book_key}.json"
+    response = requests.get(url)
+    if response.status_code == 200:
+        book_data = response.json()
+        description = book_data.get('description', 'No description available.')
+        if isinstance(description, dict):
+            description = description.get('value', 'No description available.')
+        publish_date = book_data.get('publish_date', 'No publish date available.')
+        return description, publish_date
+    return 'No description available.', 'No publish date available.'
+
+# Search and pagination interface
+st.title("Open Library Search and Save Tool")
+query = st.text_input("Enter a book title or keyword:")
+author = st.text_input("Author (optional):")
+genre = st.text_input("Genre (optional):")
+year = st.text_input("Publication Year (optional):")
+
+# Handle the search action
+if st.button("Search"):
+    st.session_state.search_results = search_books(query, author, genre, year, st.session_state.page)
+    st.session_state.page = 1  # Reset page to 1 on a new search
+
+# Display the results
+if st.session_state.search_results:
+    books, most_common_genres = format_search_results(st.session_state.search_results)
+    st.write(f"Top 5 Genres: {', '.join(most_common_genres)}")
+    for book in books[:10]:  # Show only the top 10 results
+        st.subheader(f"{book['title']} ({book['published_date']})")
+        st.markdown(f"**Author(s):** {book['authors']}")
+        st.markdown(f"**Genre:** {', '.join([genre for genre in book['categories'] if genre in most_common_genres])}")
+        st.markdown(f"**Description:** {book['description']}")
+        st.markdown(f"[More Info]({book['link']})")
+        save_button = st.button("Save", key=book['id'])
+        if save_button:
+            save_book(book)
+            st.success("Book saved successfully!")
+
+# Pagination buttons at the bottom
+st.write("---")  # Line separator
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("Previous Page"):
+        if st.session_state.page > 1:
+            st.session_state.page -= 1
+            st.session_state.search_results = search_books(query, author, genre, year, st.session_state.page)
+with col2:
+    if st.button("Next Page"):
+        st.session_state.page += 1
+        st.session_state.search_results = search_books(query, author, genre, year, st.session_state.page)
+
+# Rest of the interface for saved books and clearing the database
 if st.button("Show Saved Books"):
     c.execute("SELECT * FROM saved_books")
     saved_books = c.fetchall()
@@ -133,8 +126,10 @@ if st.button("Show Saved Books"):
     else:
         st.write("No saved books.")
 
-# Clear all saved books
 if st.button("Clear All Saved Books"):
     c.execute("DELETE FROM saved_books")
     conn.commit()
     st.success("All saved books cleared.")
+
+# Close the database connection
+conn.close()
