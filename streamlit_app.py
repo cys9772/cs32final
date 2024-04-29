@@ -4,7 +4,10 @@ import textwrap
 import sqlite3
 
 # Set page config
-st.set_page_config(page_title="Open Library Search", layout="wide")
+st.set_page_config(page_title="Shen-Hwang CS32 Final Project", layout="wide")
+
+# Central title
+st.title("Shen-Hwang CS32 Final Project")
 
 # Database setup
 conn = sqlite3.connect('books.db', check_same_thread=False)
