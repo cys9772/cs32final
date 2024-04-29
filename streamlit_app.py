@@ -7,7 +7,7 @@ import sqlite3
 st.set_page_config(page_title="Shen-Hwang CS32 Final Project", layout="wide")
 
 # Centering the title
-col1, col2, col3 = st.columns([3, 4, 3])
+col1, col2, col3 = st.columns([2, 3, 2])
 with col2:
     st.title("Shen-Hwang CS32 Final Project")
 
