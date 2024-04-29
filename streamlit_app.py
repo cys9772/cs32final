@@ -11,7 +11,7 @@ conn = sqlite3.connect('books.db', check_same_thread=False)
 c = conn.cursor()
 c.execute('''
 CREATE TABLE IF NOT EXISTS saved_books
-(id TEXT PRIMARY KEY, title TEXT, author TEXT, published_date TEXT, categories TEXT, description TEXT, link TEXT)
+(id TEXT PRIMARY KEY, title TEXT, author TEXT, published_date TEXT, categories TEXT, description TEXT, link TEXT, image_url TEXT)
 ''')
 conn.commit()
 
@@ -28,9 +28,10 @@ def save_book(book):
                 book['published_date'],
                 ", ".join(book['categories']),
                 book['description'],
-                book['link']
+                book['link'],
+                book['image_url']  # Ensure this is correctly passed to save_book
             )
-            c.execute("INSERT INTO saved_books VALUES (?, ?, ?, ?, ?, ?, ?)", book_data)
+            c.execute("INSERT INTO saved_books VALUES (?, ?, ?, ?, ?, ?, ?, ?)", book_data)
             conn.commit()
             st.success(f"Book saved successfully: {book['title']}")
         else:
@@ -109,7 +110,8 @@ if 'search_results' in st.session_state and st.session_state.search_results:
                     'published_date': book.get('first_publish_year', 'No Date Available'),
                     'categories': book.get('subject', []),
                     'description': description,
-                    'link': f"https://openlibrary.org{book['key']}"
+                    'link': f"https://openlibrary.org{book['key']}",
+                    'image_url': cover_url
                 })
 
     # Pagination buttons
@@ -127,7 +129,11 @@ if st.button("Show Saved Books"):
     saved_books = c.fetchall()
     if saved_books:
         for book in saved_books:
-            st.text(f"ID: {book[0]}\nTitle: {book[1]}\nAuthor(s): {book[2]}\nYear: {book[3]}\nGenre: {book[4]}\nDescription: {textwrap.fill(book[5], width=80)}\nLink: {book[6]}")
+            col1, col2 = st.columns([1, 5])
+            with col1:
+                st.image(book[7], width=100, use_column_width=True)  # Display saved book cover image
+            with col2:
+                st.text(f"ID: {book[0]}\nTitle: {book[1]}\nAuthor(s): {book[2]}\nYear: {book[3]}\nGenre: {', '.join(book[4].split(', ')[:5])}\nDescription: {textwrap.fill(book[5], width=80)}\nLink: {book[6]}")
     else:
         st.write("No saved books.")
 
