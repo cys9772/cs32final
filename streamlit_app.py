@@ -48,17 +48,19 @@ def format_search_results(search_results):
     genre_count = Counter()
     books_list = []
     for item in search_results['docs']:
+        book_key = item.get('key', '')
+        description = get_book_details(book_key)  # Fetch description immediately
         book_info = {
-            'key': item.get('key', ''),
+            'id': book_key.split('/')[-1],
             'title': item.get('title', 'No Title Available'),
             'authors': ", ".join(item.get('author_name', ['Unknown Author'])),
             'published_date': item.get('publish_year', ['No Date Available'])[0],
             'categories': item.get('subject', ['No Genre Available']),
-            'description': 'Click "Get Description" to load',
-            'link': f"https://openlibrary.org{item.get('key', '')}"
+            'description': textwrap.fill(description, width=80),
+            'link': f"https://openlibrary.org{book_key}"
         }
         books_list.append(book_info)
-        genre_count.update(book_info['categories'])
+        genre_count.update(item.get('subject', []))
 
     # Select the top 5 most common genres
     most_common_genres = [genre for genre, count in genre_count.most_common(5)]
@@ -82,20 +84,15 @@ if st.button("Search"):
             st.subheader(f"{book['title']} ({book['published_date']})")
             st.markdown(f"**Author(s):** {book['authors']}")
             st.markdown(f"**Genre:** {', '.join([genre for genre in book['categories'] if genre in most_common_genres])}")
-            if st.button("Get Description", key=book['key']):
-                description = get_book_details(book['key'])
-                book['description'] = description
-                st.markdown(f"**Description:** {textwrap.shorten(description, width=250, placeholder='...')}")
-            else:
-                st.markdown("**Description:** Click 'Get Description' to load")
+            st.markdown(f"**Description:** {book['description']}")
             st.markdown(f"[More Info]({book['link']})")
-            if st.button("Save", key='save_' + book['key']):
+            if st.button("Save", key=book['id']):
                 save_book(book)
 
 # Function to save a selected book to the database
 def save_book(book):
     book_data = (
-        book['key'].split('/')[-1],
+        book['id'],
         book['title'],
         book['authors'],
         book['published_date'],
