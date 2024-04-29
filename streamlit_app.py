@@ -50,11 +50,14 @@ def format_search_results(search_results):
     for item in search_results['docs']:
         book_key = item.get('key', '')
         description = get_book_details(book_key)  # Fetch description immediately
+        publish_years = item.get('publish_year', [])
+        published_date = max(publish_years, default="No Date Available") if publish_years else "No Date Available"
+
         book_info = {
             'id': book_key.split('/')[-1],
             'title': item.get('title', 'No Title Available'),
             'authors': ", ".join(item.get('author_name', ['Unknown Author'])),
-            'published_date': item.get('publish_year', ['No Date Available'])[0],
+            'published_date': published_date,
             'categories': item.get('subject', ['No Genre Available']),
             'description': textwrap.fill(description, width=80),
             'link': f"https://openlibrary.org{book_key}"
