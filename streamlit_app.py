@@ -3,16 +3,15 @@ import requests
 import textwrap
 import sqlite3
 
-# Set page config
+# Set the configuration for the page, including the title displayed in the browser tab.
 st.set_page_config(page_title="Shen-Hwang CS32 Final Project", layout="wide")
 
-# Using columns to more precisely center the title
-# Adjust the weights to center the title as needed
+# Set up a section to center the title on the page for aesthetic appeal.
 col1, col2, col3 = st.columns([5, 6, 5])
 with col2:
     st.title("Shen-Hwang CS32 Final Project")
 
-# Database setup
+# Establish a connection to the SQLite database and create the table for saved books if it doesn't already exist.
 conn = sqlite3.connect('books.db', check_same_thread=False)
 c = conn.cursor()
 c.execute('''
@@ -21,13 +20,13 @@ CREATE TABLE IF NOT EXISTS saved_books
 ''')
 conn.commit()
 
-# Function to save a selected book to the database
+# Define a function to save books to the database. It checks for duplicates before insertion.
 def save_book(book):
     try:
         c.execute("SELECT id FROM saved_books WHERE id = ?", (book['id'],))
         exists = c.fetchone()
         if not exists:
-            book_data = (
+            c.execute("INSERT INTO saved_books VALUES (?, ?, ?, ?, ?, ?, ?, ?)", (
                 book['id'],
                 book['title'],
                 book['authors'],
@@ -35,9 +34,8 @@ def save_book(book):
                 ", ".join(book['categories']),
                 book['description'],
                 book['link'],
-                book['image_url']  # Ensure this is correctly passed to save_book
-            )
-            c.execute("INSERT INTO saved_books VALUES (?, ?, ?, ?, ?, ?, ?, ?)", book_data)
+                book['image_url']
+            ))
             conn.commit()
             st.success(f"Book saved successfully: {book['title']}")
         else:
@@ -45,8 +43,7 @@ def save_book(book):
     except sqlite3.IntegrityError as e:
         st.error(f"Error saving the book: {e}")
 
-# Function to get book details from Open Library API
-@st.cache(allow_output_mutation=True, show_spinner=False)
+# Fetch book details from the Open Library API. This includes the description and cover image.
 def get_book_details(book_key):
     url = f"https://openlibrary.org{book_key}.json"
     response = requests.get(url)
@@ -60,14 +57,13 @@ def get_book_details(book_key):
         return textwrap.fill(description, width=80), cover_url
     return 'No description available.', "https://via.placeholder.com/128x193?text=No+Cover"
 
-# Function to search books using Open Library API
-@st.cache(show_spinner=False, ttl=3600)  # Cache results for 1 hour
+# A function to fetch books based on user queries from the Open Library API, cached to enhance performance.
 def search_books(query, page=1):
     url = f"https://openlibrary.org/search.json?q={query}&page={page}"
     response = requests.get(url)
     return response.json() if response.status_code == 200 else None
 
-# Streamlit interface for book search
+# Setup for the main interface for user input and interaction.
 st.title("Open Library Search and Save Tool")
 query = st.text_input("Enter a book title or keyword:")
 
@@ -75,7 +71,7 @@ if st.button("Search"):
     st.session_state.search_results = search_books(query, 1)
     st.session_state.page = 1
 
-# Display search results and handle pagination and filtering
+# Display search results with pagination, and options for filtering by genre, author, and year.
 if 'search_results' in st.session_state and st.session_state.search_results:
     books = st.session_state.search_results['docs']
     genre_options = sorted(set(g for book in books for g in book.get('subject', [])))
@@ -98,10 +94,10 @@ if 'search_results' in st.session_state and st.session_state.search_results:
     displayed_books = books[start_index:end_index]
 
     for book in displayed_books:
-        col1, col2 = st.columns([1, 5])  # Adjusted for closer image-text alignment
+        col1, col2 = st.columns([1, 5])
         description, cover_url = get_book_details(book['key'])
         with col1:
-            st.image(cover_url, width=100, use_column_width=True)  # Further reduced spacing
+            st.image(cover_url, width=100, use_column_width=True)
         with col2:
             st.subheader(f"{book['title']} ({book.get('first_publish_year', 'No Date Available')})")
             st.markdown(f"**Author(s):** {', '.join(book.get('author_name', ['Unknown Author']))}")
@@ -120,7 +116,7 @@ if 'search_results' in st.session_state and st.session_state.search_results:
                     'image_url': cover_url
                 })
 
-    # Pagination buttons
+    # Setup for pagination controls.
     col1, col2 = st.columns(2)
     with col1:
         if page > 1 and st.button("Previous Page"):
@@ -129,7 +125,7 @@ if 'search_results' in st.session_state and st.session_state.search_results:
         if end_index < len(books) and st.button("Next Page"):
             st.session_state.page += 1
 
-# Display and manage saved books
+# Display and manage the list of saved books, with options to clear all records.
 if st.button("Show Saved Books"):
     c.execute("SELECT * FROM saved_books")
     saved_books = c.fetchall()
@@ -148,4 +144,5 @@ if st.button("Clear All Saved Books"):
     conn.commit()
     st.success("All saved books cleared.")
 
+# Close the database connection.
 conn.close()
