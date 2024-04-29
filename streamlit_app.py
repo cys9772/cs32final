@@ -28,9 +28,7 @@ def search_books(query, author=None, genre=None, year=None):
     response = requests.get(url)
     return response.json() if response.status_code == 200 else None
 
-# Function to fetch detailed book data including description and publish date
-# Function to fetch detailed book data including description and publish date
-# Function to fetch detailed book data including description and publish date
+# Function to fetch detailed book data
 def get_book_details(book_key):
     url = f"https://openlibrary.org{book_key}.json"
     response = requests.get(url)
@@ -39,17 +37,8 @@ def get_book_details(book_key):
         description = book_data.get('description', 'No description available.')
         if isinstance(description, dict):
             description = description.get('value', 'No description available.')
-
-        # Attempt to get the most accurate publish date
-        publish_date = book_data.get('publish_date', 'No publish date available.')
-        if not publish_date:  # If publish_date wasn't found, try alternative methods
-            editions = book_data.get('editions', [])
-            if editions:
-                # Try getting the publish_date from the first edition's data
-                publish_date = editions[0].get('publish_date', 'No publish date available.')
-
-        return description, publish_date
-    return 'No description available.', 'No publish date available.'
+        return description
+    return 'No description available.'
 
 # Function to format the search results for display
 def format_search_results(search_results):
@@ -60,12 +49,12 @@ def format_search_results(search_results):
     books_list = []
     for item in search_results['docs']:
         book_key = item.get('key', '')
-        description, publish_date = get_book_details(book_key)  # Fetch description and publish date immediately
+        description = get_book_details(book_key)  # Fetch description immediately
         book_info = {
             'id': book_key.split('/')[-1],
             'title': item.get('title', 'No Title Available'),
             'authors': ", ".join(item.get('author_name', ['Unknown Author'])),
-            'published_date': publish_date,  # Using fetched publish date
+            'published_date': item.get('publish_year', ['No Date Available'])[0],
             'categories': item.get('subject', ['No Genre Available']),
             'description': textwrap.fill(description, width=80),
             'link': f"https://openlibrary.org{book_key}"
