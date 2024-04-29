@@ -6,8 +6,10 @@ import sqlite3
 # Set page config
 st.set_page_config(page_title="Shen-Hwang CS32 Final Project", layout="wide")
 
-# Central title
-st.title("Shen-Hwang CS32 Final Project")
+# Using columns to center the title
+col1, col2, col3 = st.columns([1,6,1])
+with col2:
+    st.title("Shen-Hwang CS32 Final Project")
 
 # Database setup
 conn = sqlite3.connect('books.db', check_same_thread=False)
