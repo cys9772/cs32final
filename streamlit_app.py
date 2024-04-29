@@ -7,31 +7,36 @@ from collections import Counter
 # Set page config
 st.set_page_config(page_title="Open Library Search", layout="wide")
 
-# Establish a database connection and create a table if not exists
-def create_db_connection():
-    conn = sqlite3.connect('books.db', check_same_thread=False)
-    c = conn.cursor()
-    c.execute('''
-    CREATE TABLE IF NOT EXISTS saved_books
-    (id TEXT PRIMARY KEY, title TEXT, author TEXT, published_date TEXT, categories TEXT, description TEXT, link TEXT)
-    ''')
-    conn.commit()
-    return conn, c
+# Database setup
+conn = sqlite3.connect('books.db', check_same_thread=False)
+c = conn.cursor()
+c.execute('''
+CREATE TABLE IF NOT EXISTS saved_books
+(id TEXT PRIMARY KEY, title TEXT, author TEXT, published_date TEXT, categories TEXT, description TEXT, link TEXT)
+''')
+conn.commit()
 
 # Function to save a selected book to the database
-def save_book(book, cursor, connection):
+def save_book(book):
     try:
-        book_data = (
-            book['id'],
-            book['title'],
-            book['authors'],
-            book['published_date'],
-            ", ".join(book['categories']),
-            book['description'],
-            book['link']
-        )
-        cursor.execute("INSERT INTO saved_books VALUES (?, ?, ?, ?, ?, ?, ?)", book_data)
-        connection.commit()
+        # Check if the book already exists in the database
+        c.execute("SELECT id FROM saved_books WHERE id = ?", (book['id'],))
+        exists = c.fetchone()
+        if not exists:
+            book_data = (
+                book['id'],
+                book['title'],
+                book['authors'],
+                book['published_date'],
+                ", ".join(book['categories']),
+                book['description'],
+                book['link']
+            )
+            c.execute("INSERT INTO saved_books VALUES (?, ?, ?, ?, ?, ?, ?)", book_data)
+            conn.commit()
+            st.success(f"Book saved successfully: {book['title']}")
+        else:
+            st.warning("Book already exists in the database.")
     except sqlite3.IntegrityError as e:
         st.error(f"Error saving the book: {e}")
 
@@ -66,11 +71,9 @@ def search_books(query, author=None, genre=None, year=None, page=1):
 
 # Initialize session state for pagination and search results
 if 'page' not in st.session_state:
-    st.session_state['page'] = 1
+    st.session_state.page = 1
 if 'search_results' not in st.session_state:
-    st.session_state['search_results'] = []
-
-conn, c = create_db_connection()  # Initialize database connection
+    st.session_state.search_results = []
 
 # Streamlit interface for book search
 st.title("Open Library Search and Save Tool")
@@ -80,23 +83,21 @@ genre = st.text_input("Genre (optional):")
 year = st.text_input("Publication Year (optional):")
 
 if st.button("Search"):
-    st.session_state['search_results'] = search_books(query, author, genre, year, st.session_state['page'])
-    st.session_state['page'] = 1  # Reset to first page when a new search is performed
+    st.session_state.search_results = search_books(query, author, genre, year, st.session_state.page)
+    st.session_state.page = 1  # Reset to first page when new search is performed
 
 # Display search results and handle pagination
-if st.session_state['search_results']:
-    books = st.session_state['search_results']['docs']
-    page = st.session_state['page']
+if st.session_state.search_results:
+    books = st.session_state.search_results['docs']
+    page = st.session_state.page
     start_index = (page - 1) * 10
     end_index = start_index + 10
     displayed_books = books[start_index:end_index]
 
     for book in displayed_books:
-        genres = book.get('subject', [])
-        top_genres = ", ".join(genres[:5]) if genres else "No Genres Available"
         st.subheader(f"{book['title']} ({book.get('first_publish_year', 'No Date Available')})")
         st.markdown(f"**Author(s):** {', '.join(book.get('author_name', ['Unknown Author']))}")
-        st.markdown(f"**Genre:** {top_genres}")
+        st.markdown(f"**Genre:** {', '.join(book.get('subject', [])[:5])}")
         description = get_book_details(book['key'])
         st.markdown(f"**Description:** {description}")
         st.markdown(f"[More Info](https://openlibrary.org{book['key']})")
@@ -106,10 +107,10 @@ if st.session_state['search_results']:
                 'title': book['title'],
                 'authors': ', '.join(book.get('author_name', [])),
                 'published_date': book.get('first_publish_year', 'No Date Available'),
-                'categories': genres,
+                'categories': book.get('subject', []),
                 'description': description,
                 'link': f"https://openlibrary.org{book['key']}"
-            }, c, conn)
+            })
 
     # Pagination buttons
     col1, col2 = st.columns(2)
@@ -120,4 +121,18 @@ if st.session_state['search_results']:
         if end_index < len(books) and st.button("Next Page"):
             st.session_state.page += 1
 
-conn.close()  # Close the database connection when done
+# Display saved books
+if st.button("Show Saved Books"):
+    c.execute("SELECT * FROM saved_books")
+    saved_books = c.fetchall()
+    if saved_books:
+        for book in saved_books:
+            st.text(f"ID: {book[0]}\nTitle: {book[1]}\nAuthor(s): {book[2]}\nYear: {book[3]}\nGenre: {book[4]}\nDescription: {textwrap.fill(book[5], width=80)}\nLink: {book[6]}")
+    else:
+        st.write("No saved books.")
+
+# Clear all saved books
+if st.button("Clear All Saved Books"):
+    c.execute("DELETE FROM saved_books")
+    conn.commit()
+    st.success("All saved books cleared.")
