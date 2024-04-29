@@ -70,15 +70,16 @@ if st.button("Search"):
 # Display search results and handle pagination and filtering
 if 'search_results' in st.session_state and st.session_state.search_results:
     books = st.session_state.search_results['docs']
-    genre_options = list(set(g for book in books for g in book.get('subject', [])))
-    years = sorted(set(y for book in books for y in book.get('publish_year', [])))
+    genre_options = sorted(set(g for book in books for g in book.get('subject', [])))
+    author_options = sorted(set(a for book in books for a in book.get('author_name', [])))
 
     selected_genres = st.multiselect("Filter by Genre", options=genre_options)
-    year_range = st.slider("Filter by Year Range", int(min(years)), int(max(years)), (int(min(years)), int(max(years))))
+    selected_authors = st.multiselect("Filter by Author", options=author_options)
 
     if selected_genres:
-        books = [book for book in books if any(g in selected_genres for g in book.get('subject', []))]
-    books = [book for book in books if year_range[0] <= int(book.get('first_publish_year', year_range[0])) <= year_range[1]]
+        books = [book for book in books if set(book.get('subject', [])).intersection(selected_genres)]
+    if selected_authors:
+        books = [book for book in books if set(book.get('author_name', [])).intersection(selected_authors)]
 
     page = st.session_state.page
     start_index = (page - 1) * 10
