@@ -3,15 +3,15 @@ import requests
 import textwrap
 import sqlite3
 
-# Set the configuration for the page, including the title displayed in the browser tab.
+# Set the configuration for the page, including the title
 st.set_page_config(page_title="Shen-Hwang CS32 Final Project", layout="wide")
 
-# Set up a section to center the title on the page for aesthetic appeal.
+# Centering the title
 col1, col2, col3 = st.columns([5, 6, 5])
 with col2:
     st.title("Shen-Hwang CS32 Final Project")
 
-# Establish a connection to the SQLite database and create the table for saved books if it doesn't already exist.
+# Loading SQLite database connection and creating a table for future use
 conn = sqlite3.connect('books.db', check_same_thread=False)
 c = conn.cursor()
 c.execute('''
@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS saved_books
 ''')
 conn.commit()
 
-# Define a function to save books to the database. It checks for duplicates before insertion.
+# Save book function -- checks for duplicates first
 def save_book(book):
     try:
         c.execute("SELECT id FROM saved_books WHERE id = ?", (book['id'],))
@@ -43,7 +43,7 @@ def save_book(book):
     except sqlite3.IntegrityError as e:
         st.error(f"Error saving the book: {e}")
 
-# Fetch book details from the Open Library API. This includes the description and cover image.
+# Get book details from Open Library API (image, description, author, etc)
 def get_book_details(book_key):
     url = f"https://openlibrary.org{book_key}.json"
     response = requests.get(url)
@@ -57,13 +57,13 @@ def get_book_details(book_key):
         return textwrap.fill(description, width=80), cover_url
     return 'No description available.', "https://via.placeholder.com/128x193?text=No+Cover"
 
-# A function to fetch books based on user queries from the Open Library API, cached to enhance performance.
+# Search book function based on user input
 def search_books(query, page=1):
     url = f"https://openlibrary.org/search.json?q={query}&page={page}"
     response = requests.get(url)
     return response.json() if response.status_code == 200 else None
 
-# Setup for the main interface for user input and interaction.
+# Main interface setup
 st.title("Open Library Search and Save Tool")
 query = st.text_input("Enter a book title or keyword:")
 
@@ -71,13 +71,14 @@ if st.button("Search"):
     st.session_state.search_results = search_books(query, 1)
     st.session_state.page = 1
 
-# Display search results with pagination, and options for filtering by genre, author, and year.
+# Search result display and show filtering options
 if 'search_results' in st.session_state and st.session_state.search_results:
     books = st.session_state.search_results['docs']
     genre_options = sorted(set(g for book in books for g in book.get('subject', [])))
     author_options = sorted(set(a.lower() for book in books for a in book.get('author_name', [])))
     years = sorted(set(y for book in books for y in book.get('publish_year', [])))
 
+    # Filtering by genre, author, and year (slider)
     selected_genres = st.multiselect("Filter by Genre", options=genre_options)
     selected_authors = st.multiselect("Filter by Author", options=author_options)
     year_range = st.slider("Filter by Year Range", int(min(years)), int(max(years)), (int(min(years)), int(max(years))))
@@ -88,11 +89,13 @@ if 'search_results' in st.session_state and st.session_state.search_results:
         books = [book for book in books if set(a.lower() for a in book.get('author_name', [])).intersection(set(selected_authors))]
     books = [book for book in books if year_range[0] <= int(book.get('first_publish_year', year_range[0])) <= year_range[1]]
 
+    # Stay in the current session
     page = st.session_state.page
     start_index = (page - 1) * 10
     end_index = start_index + 10
     displayed_books = books[start_index:end_index]
 
+    # Book display and UI formating with markdown to make things look nicer
     for book in displayed_books:
         col1, col2 = st.columns([1, 5])
         description, cover_url = get_book_details(book['key'])
@@ -116,7 +119,7 @@ if 'search_results' in st.session_state and st.session_state.search_results:
                     'image_url': cover_url
                 })
 
-    # Setup for pagination controls.
+    # Page scrolling setup (next and previous)
     col1, col2 = st.columns(2)
     with col1:
         if page > 1 and st.button("Previous Page"):
@@ -125,7 +128,7 @@ if 'search_results' in st.session_state and st.session_state.search_results:
         if end_index < len(books) and st.button("Next Page"):
             st.session_state.page += 1
 
-# Display and manage the list of saved books, with options to clear all records.
+# Saving and deleting book list that users save
 if st.button("Show Saved Books"):
     c.execute("SELECT * FROM saved_books")
     saved_books = c.fetchall()
@@ -139,10 +142,11 @@ if st.button("Show Saved Books"):
     else:
         st.write("No saved books.")
 
+# Deleting saved books in the session
 if st.button("Clear All Saved Books"):
     c.execute("DELETE FROM saved_books")
     conn.commit()
     st.success("All saved books cleared.")
 
-# Close the database connection.
+# Close the database connection
 conn.close()
