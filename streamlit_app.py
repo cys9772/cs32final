@@ -69,13 +69,7 @@ def search_books(query, author=None, genre=None, year=None, page=1):
     response = requests.get(url)
     return response.json() if response.status_code == 200 else None
 
-# Initialize session state for pagination and search results
-if 'page' not in st.session_state:
-    st.session_state.page = 1
-if 'search_results' not in st.session_state:
-    st.session_state.search_results = []
-
-# Streamlit interface for book search
+# Streamlit interface for book search and filtering
 st.title("Open Library Search and Save Tool")
 query = st.text_input("Enter a book title or keyword:")
 author = st.text_input("Author (optional):")
@@ -83,12 +77,19 @@ genre = st.text_input("Genre (optional):")
 year = st.text_input("Publication Year (optional):")
 
 if st.button("Search"):
-    st.session_state.search_results = search_books(query, author, genre, year, st.session_state.page)
-    st.session_state.page = 1  # Reset to first page when new search is performed
+    st.session_state.search_results = search_books(query, author, genre, year, 1)
+    st.session_state.page = 1
 
-# Display search results and handle pagination
-if st.session_state.search_results:
+# Display search results and handle pagination and filtering
+if 'search_results' in st.session_state and st.session_state.search_results:
     books = st.session_state.search_results['docs']
+    all_genres = Counter([g for book in books for g in book.get('subject', [])])
+    top_global_genres = [genre for genre, count in all_genres.most_common(10)]
+    
+    selected_genre = st.selectbox("Filter by Genre", ["All"] + top_global_genres)
+    if selected_genre != "All":
+        books = [book for book in books if selected_genre in book.get('subject', [])]
+
     page = st.session_state.page
     start_index = (page - 1) * 10
     end_index = start_index + 10
@@ -136,3 +137,5 @@ if st.button("Clear All Saved Books"):
     c.execute("DELETE FROM saved_books")
     conn.commit()
     st.success("All saved books cleared.")
+
+conn.close()
