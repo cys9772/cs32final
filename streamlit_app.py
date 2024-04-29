@@ -12,110 +12,93 @@ CREATE TABLE IF NOT EXISTS saved_books
 ''')
 conn.commit()
 
-# Function to save books to the database
-def save_book(book):
+# Constants
+RESULTS_PER_PAGE = 10  # Number of results per page
+
+# Google Books API key
+api_key = 'YOUR_API_KEY_HERE'  # Replace 'YOUR_API_KEY_HERE' with your actual Google Books API key
+
+# Function to search books using Google Books API
+def search_books(query, author=None, genre=None, year=None):
+    query_parts = [query]
+    if author:
+        query_parts.append(f"inauthor:{author}")
+    if genre:
+        query_parts.append(f"subject:{genre}")
+    if year:
+        query_parts.append(f"inpublisher:{year}")
+
+    query_string = '+'.join(query_parts)
+    url = f"https://www.googleapis.com/books/v1/volumes?q={query_string}&key={api_key}"
+    response = requests.get(url)
+    return response.json() if response.status_code == 200 else None
+
+# Function to format the search results for display
+def format_search_results(search_results):
+    if 'items' not in search_results:
+        return [], [], []
+    books_list = []
+    genres = set()
+    years = set()
+    for item in search_results['items']:
+        volume_info = item['volumeInfo']
+        genres.update(volume_info.get('categories', []))
+        years.add(volume_info.get('publishedDate', '')[0:4])
+        book_info = {
+            'id': item['id'],
+            'title': volume_info.get('title', 'No Title Available'),
+            'authors': ", ".join(volume_info.get('authors', ['Unknown Author'])),
+            'published_date': volume_info.get('publishedDate', 'No Date Available')[:4],
+            'categories': ", ".join(volume_info.get('categories', ['No Genre Available'])),
+            'description': textwrap.fill(volume_info.get('description', 'No Description Available'), width=80),
+            'link': volume_info.get('infoLink', '#')
+        }
+        books_list.append(book_info)
+    genres = sorted(list(genres))
+    years = sorted(list(years))
+    return books_list, genres, years
+
+# Streamlit interface for book search
+st.title("Google Books Search and Save Tool")
+
+# Search inputs
+query = st.text_input("Enter a book title or keyword:")
+author = st.text_input("Author (optional):")
+genre = st.text_input("Genre (optional):")
+year = st.text_input("Publication Year (optional):")
+
+if st.button("Search"):
+    search_results = search_books(query, author, genre, year)
+    books, available_genres, available_years = format_search_results(search_results)
+    if books:
+        for book in books:
+            st.subheader(f"{book['title']} ({book['published_date']})")
+            st.markdown(f"**Author(s):** {book['authors']}")
+            st.markdown(f"**Genre:** {book['categories']}")
+            st.markdown(f"**Description:** {book['description']}")
+            st.markdown(f"[More Info]({book['link']})")
+            if st.button("Save", key=book['id']):
+                save_book(book['id'])
+                st.success("Book saved successfully!")
+
+# Function to save a selected book to the database
+def save_book(book_id):
+    url = f"https://www.googleapis.com/books/v1/volumes/{book_id}?key={api_key}"
+    response = requests.get(url).json()
+    volume_info = response['volumeInfo']
     book_data = (
-        book['id'],
-        book['title'],
-        book['authors'],
-        book['published_date'],
-        book['categories'],
-        book['description'],
-        book['link']
+        book_id,
+        volume_info.get('title', 'No Title Available'),
+        ", ".join(volume_info.get('authors', ['Unknown Author'])),
+        volume_info.get('publishedDate', 'No Date Available')[:4],
+        ", ".join(volume_info.get('categories', ['No Genre Available'])),
+        volume_info.get('description', 'No Description Available'),
+        volume_info.get('infoLink', '#')
     )
     c.execute("INSERT INTO saved_books VALUES (?, ?, ?, ?, ?, ?, ?)", book_data)
     conn.commit()
 
-# Constants
-RESULTS_PER_PAGE = 10  # Number of results per page
-
-# Initialize session state variables if not already present
-if 'search_results' not in st.session_state:
-    st.session_state['search_results'] = None
-if 'current_page' not in st.session_state:
-    st.session_state['current_page'] = 1
-
-# Function to search books using Open Library
-def search_books(query, page=1):
-    url = f"https://openlibrary.org/search.json?q={query}&page={page}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        st.error(f"Failed to fetch books. Error {response.status_code}: {response.text}")
-        return None
-
-# Function to fetch detailed book data
-def get_book_details(book_key):
-    url = f"https://openlibrary.org{book_key}.json"
-    response = requests.get(url)
-    if response.status_code == 200:
-        book_data = response.json()
-        description = book_data.get('description')
-        if isinstance(description, dict):
-            description = description.get('value', 'No description available.')
-        return description
-    else:
-        return 'No description available.'
-
-# Function to format search results from Open Library
-def format_search_results(search_results):
-    books = search_results.get('docs', [])
-    formatted_books = []
-    for book in books[:RESULTS_PER_PAGE]:  # Limit results processed to RESULTS_PER_PAGE
-        book_key = book.get('key')
-        genres = book.get('subject', [])
-        top_genres = ", ".join(genres[:5]) if genres else "No Genres Available"
-
-        description = get_book_details(book_key) or 'No description available.'
-
-        book_info = {
-            'id': book_key.split('/')[-1],
-            'title': book.get('title', 'No Title Available'),
-            'authors': ", ".join(book.get('author_name', ['Unknown Author'])),
-            'published_date': book.get('publish_date', ['No Date Available'])[0],
-            'categories': top_genres,
-            'description': description,
-            'link': f"https://openlibrary.org{book_key}"
-        }
-        formatted_books.append(book_info)
-    return formatted_books
-
-# Streamlit interface
-st.title("Book Search and Save Tool")
-
-# Search books
-search_query = st.text_input("Enter book title or author:", key='search')
-if st.button("Search", key='search_button'):
-    st.session_state['search_results'] = search_books(search_query, st.session_state['current_page'])
-
-# Display results
-if st.session_state['search_results']:
-    books = format_search_results(st.session_state['search_results'])
-    for book in books:
-        st.subheader(f"{book['title']} ({book['published_date']})")
-        st.markdown(f"**Author(s):** {book['authors']}")
-        st.markdown(f"**Genre:** {book['categories']}")
-        st.markdown(f"**Description:** {textwrap.shorten(book['description'], width=250, placeholder='...')}")
-        st.markdown(f"[More Info]({book['link']})")
-        if st.button("Save", key=book['id']):
-            save_book(book)
-            st.success("Book saved successfully!")
-
-    # Pagination controls
-    if len(books) > 0:  # Only show pagination if there are books displayed
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button('Previous', key='prev'):
-                if st.session_state['current_page'] > 1:
-                    st.session_state['current_page'] -= 1
-                    st.session_state['search_results'] = search_books(search_query, st.session_state['current_page'])
-        with col2:
-            if st.button('Next', key='next'):
-                st.session_state['current_page'] += 1
-                st.session_state['search_results'] = search_books(search_query, st.session_state['current_page'])
-
-# Function to show saved books
+# Display saved books
 if st.button("Show Saved Books"):
     c.execute("SELECT * FROM saved_books")
     saved_books = c.fetchall()
@@ -126,7 +109,7 @@ if st.button("Show Saved Books"):
         st.write("No saved books.")
 
 # Clear all saved books
-if st.button("Clear Saved Books"):
+if st.button("Clear All Saved Books"):
     c.execute("DELETE FROM saved_books")
     conn.commit()
     st.success("All saved books cleared.")
