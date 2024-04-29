@@ -71,15 +71,18 @@ if st.button("Search"):
 if 'search_results' in st.session_state and st.session_state.search_results:
     books = st.session_state.search_results['docs']
     genre_options = sorted(set(g for book in books for g in book.get('subject', [])))
-    author_options = sorted(set(a for book in books for a in book.get('author_name', [])))
+    author_options = sorted(set(a.lower() for book in books for a in book.get('author_name', [])))
+    years = sorted(set(y for book in books for y in book.get('publish_year', [])))
 
     selected_genres = st.multiselect("Filter by Genre", options=genre_options)
     selected_authors = st.multiselect("Filter by Author", options=author_options)
+    year_range = st.slider("Filter by Year Range", int(min(years)), int(max(years)), (int(min(years)), int(max(years))))
 
     if selected_genres:
         books = [book for book in books if set(book.get('subject', [])).intersection(selected_genres)]
     if selected_authors:
-        books = [book for book in books if set(book.get('author_name', [])).intersection(selected_authors)]
+        books = [book for book in books if set(a.lower() for a in book.get('author_name', [])).intersection(set(selected_authors))]
+    books = [book for book in books if year_range[0] <= int(book.get('first_publish_year', year_range[0])) <= year_range[1]]
 
     page = st.session_state.page
     start_index = (page - 1) * 10
