@@ -10,7 +10,8 @@ st.set_page_config(page_title="Open Library Search", layout="wide")
 conn = sqlite3.connect('books.db', check_same_thread=False)
 c = conn.cursor()
 c.execute('''
-CREATE TABLE IF NOT EXISTS saved_books
+DROP TABLE IF EXISTS saved_books;  # Ensure the table schema is updated
+CREATE TABLE saved_books
 (id TEXT PRIMARY KEY, title TEXT, author TEXT, published_date TEXT, categories TEXT, description TEXT, link TEXT, image_url TEXT)
 ''')
 conn.commit()
@@ -72,6 +73,20 @@ if st.button("Search"):
 # Display search results and handle pagination and filtering
 if 'search_results' in st.session_state and st.session_state.search_results:
     books = st.session_state.search_results['docs']
+    genre_options = sorted(set(g for book in books for g in book.get('subject', [])))
+    author_options = sorted(set(a.lower() for book in books for a in book.get('author_name', [])))
+    years = sorted(set(y for book in books for y in book.get('publish_year', [])))
+
+    selected_genres = st.multiselect("Filter by Genre", options=genre_options)
+    selected_authors = st.multiselect("Filter by Author", options=author_options)
+    year_range = st.slider("Filter by Year Range", int(min(years)), int(max(years)), (int(min(years)), int(max(years))))
+
+    if selected_genres:
+        books = [book for book in books if set(book.get('subject', [])).intersection(selected_genres)]
+    if selected_authors:
+        books = [book for book in books if set(a.lower() for a in book.get('author_name', [])).intersection(set(selected_authors))]
+    books = [book for book in books if year_range[0] <= int(book.get('first_publish_year', year_range[0])) <= year_range[1]]
+
     page = st.session_state.page
     start_index = (page - 1) * 10
     end_index = start_index + 10
@@ -119,7 +134,7 @@ if st.button("Show Saved Books"):
             with col1:
                 st.image(book[7], width=100, use_column_width=True)  # Display saved book cover image
             with col2:
-                st.text(f"ID: {book[0]}\nTitle: {book[1]}\nAuthor(s): {book[2]}\nYear: {book[3]}\nGenre: {book[4]}\nDescription: {textwrap.fill(book[5], width=80)}\nLink: {book[6]}")
+                st.text(f"ID: {book[0]}\nTitle: {book[1]}\nAuthor(s): {book[2]}\nYear: {book[3]}\nGenre: {', '.join(book[4].split(', ')[:5])}\nDescription: {textwrap.fill(book[5], width=80)}\nLink: {book[6]}")
     else:
         st.write("No saved books.")
 
