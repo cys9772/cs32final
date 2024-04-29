@@ -12,54 +12,47 @@ CREATE TABLE IF NOT EXISTS saved_books
 ''')
 conn.commit()
 
-# Constants
-RESULTS_PER_PAGE = 10  # Number of results per page
-
-# Google Books API key
-api_key = 'YOUR_API_KEY_HERE'  # Replace 'YOUR_API_KEY_HERE' with your actual Google Books API key
-
-# Function to search books using Google Books API
+# Function to search books using Open Library API
 def search_books(query, author=None, genre=None, year=None):
     query_parts = [query]
     if author:
-        query_parts.append(f"inauthor:{author}")
+        query_parts.append(f"author:{author}")
     if genre:
         query_parts.append(f"subject:{genre}")
     if year:
-        query_parts.append(f"inpublisher:{year}")
+        query_parts.append(f"date:{year}")
 
     query_string = '+'.join(query_parts)
-    url = f"https://www.googleapis.com/books/v1/volumes?q={query_string}&key={api_key}"
+    url = f"https://openlibrary.org/search.json?q={query_string}"
     response = requests.get(url)
     return response.json() if response.status_code == 200 else None
 
 # Function to format the search results for display
 def format_search_results(search_results):
-    if 'items' not in search_results:
+    if not search_results or 'docs' not in search_results:
         return [], [], []
+
     books_list = []
     genres = set()
     years = set()
-    for item in search_results['items']:
-        volume_info = item['volumeInfo']
-        genres.update(volume_info.get('categories', []))
-        years.add(volume_info.get('publishedDate', '')[0:4])
+    for item in search_results['docs']:
         book_info = {
-            'id': item['id'],
-            'title': volume_info.get('title', 'No Title Available'),
-            'authors': ", ".join(volume_info.get('authors', ['Unknown Author'])),
-            'published_date': volume_info.get('publishedDate', 'No Date Available')[:4],
-            'categories': ", ".join(volume_info.get('categories', ['No Genre Available'])),
-            'description': textwrap.fill(volume_info.get('description', 'No Description Available'), width=80),
-            'link': volume_info.get('infoLink', '#')
+            'id': item.get('key', '').split('/')[-1],
+            'title': item.get('title', 'No Title Available'),
+            'authors': ", ".join(item.get('author_name', ['Unknown Author'])),
+            'published_date': item.get('publish_year', ['No Date Available'])[0],
+            'categories': ", ".join(item.get('subject', ['No Genre Available'])),
+            'description': textwrap.fill(item.get('description', 'No Description Available'), width=80),
+            'link': f"https://openlibrary.org{item.get('key', '')}"
         }
         books_list.append(book_info)
-    genres = sorted(list(genres))
-    years = sorted(list(years))
-    return books_list, genres, years
+        genres.update(item.get('subject', []))
+        years.update(str(year) for year in item.get('publish_year', []))
+
+    return books_list, sorted(list(genres)), sorted(list(years))
 
 # Streamlit interface for book search
-st.title("Google Books Search and Save Tool")
+st.title("Open Library Search and Save Tool")
 
 # Search inputs
 query = st.text_input("Enter a book title or keyword:")
@@ -83,17 +76,14 @@ if st.button("Search"):
 
 # Function to save a selected book to the database
 def save_book(book_id):
-    url = f"https://www.googleapis.com/books/v1/volumes/{book_id}?key={api_key}"
-    response = requests.get(url).json()
-    volume_info = response['volumeInfo']
     book_data = (
         book_id,
-        volume_info.get('title', 'No Title Available'),
-        ", ".join(volume_info.get('authors', ['Unknown Author'])),
-        volume_info.get('publishedDate', 'No Date Available')[:4],
-        ", ".join(volume_info.get('categories', ['No Genre Available'])),
-        volume_info.get('description', 'No Description Available'),
-        volume_info.get('infoLink', '#')
+        book['title'],
+        book['authors'],
+        book['published_date'],
+        book['categories'],
+        book['description'],
+        book['link']
     )
     c.execute("INSERT INTO saved_books VALUES (?, ?, ?, ?, ?, ?, ?)", book_data)
     conn.commit()
