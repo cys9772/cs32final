@@ -8,7 +8,7 @@ st.set_page_config(page_title="Shen-Hwang CS32 Final Project", layout="wide")
 
 # Using columns to more precisely center the title
 # Adjust the weights to center the title as needed
-col1, col2, col3 = st.columns([1, 1, 2])
+col1, col2, col3 = st.columns([2, 1, 1])
 with col2:
     st.title("Shen-Hwang CS32 Final Project")
 
