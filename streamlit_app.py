@@ -1,3 +1,5 @@
+
+
 import streamlit as st
 import requests
 import textwrap
@@ -55,8 +57,16 @@ def get_book_details(book_key):
 
 # Function to search books using Open Library API
 @st.cache(show_spinner=False, ttl=3600)  # Cache results for 1 hour
-def search_books(query, page=1):
-    query_string = '+'.join(query)
+def search_books(query, author=None, genre=None, year=None, page=1):
+    query_parts = [query]
+    if author:
+        query_parts.append(f"author:{author}")
+    if genre:
+        query_parts.append(f"subject:{genre}")
+    if year:
+        query_parts.append(f"date:{year}")
+
+    query_string = '+'.join(query_parts)
     url = f"https://openlibrary.org/search.json?q={query_string}&page={page}"
     response = requests.get(url)
     return response.json() if response.status_code == 200 else None
@@ -64,29 +74,21 @@ def search_books(query, page=1):
 # Streamlit interface for book search and filtering
 st.title("Open Library Search and Save Tool")
 query = st.text_input("Enter a book title or keyword:")
+author = st.text_input("Author (optional):")
+genre = st.text_input("Genre (optional):")
+year = st.text_input("Publication Year (optional):")
 
 if st.button("Search"):
-    st.session_state.search_results = search_books(query, 1)
+    st.session_state.search_results = search_books(query, author, genre, year, 1)
     st.session_state.page = 1
 
 # Display search results and handle pagination and filtering
 if 'search_results' in st.session_state and st.session_state.search_results:
     books = st.session_state.search_results['docs']
-    all_authors = Counter([author for book in books for author in book.get('author_name', [])])
-    top_global_authors = [author for author, count in all_authors.most_common()]
-    all_years = Counter([book.get('first_publish_year') for book in books if book.get('first_publish_year')])
-    top_global_years = [year for year, count in all_years.most_common()]
     all_genres = Counter([g for book in books for g in book.get('subject', [])])
     top_global_genres = [genre for genre, count in all_genres.most_common(10)]
-
-    selected_author = st.selectbox("Filter by Author", ["All"] + top_global_authors)
-    selected_year = st.selectbox("Filter by Publication Year", ["All"] + top_global_years)
+    
     selected_genre = st.selectbox("Filter by Genre", ["All"] + top_global_genres)
-
-    if selected_author != "All":
-        books = [book for book in books if selected_author in book.get('author_name', [])]
-    if selected_year != "All":
-        books = [book for book in books if book.get('first_publish_year') == selected_year]
     if selected_genre != "All":
         books = [book for book in books if selected_genre in book.get('subject', [])]
 
