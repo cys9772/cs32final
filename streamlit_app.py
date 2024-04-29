@@ -28,7 +28,7 @@ def search_books(query, author=None, genre=None, year=None):
     response = requests.get(url)
     return response.json() if response.status_code == 200 else None
 
-# Function to fetch detailed book data
+# Function to fetch detailed book data including description and publish date
 def get_book_details(book_key):
     url = f"https://openlibrary.org{book_key}.json"
     response = requests.get(url)
@@ -37,8 +37,9 @@ def get_book_details(book_key):
         description = book_data.get('description', 'No description available.')
         if isinstance(description, dict):
             description = description.get('value', 'No description available.')
-        return description
-    return 'No description available.'
+        publish_date = book_data.get('publish_date', 'No publish date available.')
+        return description, publish_date
+    return 'No description available.', 'No publish date available.'
 
 # Function to format the search results for display
 def format_search_results(search_results):
@@ -49,15 +50,12 @@ def format_search_results(search_results):
     books_list = []
     for item in search_results['docs']:
         book_key = item.get('key', '')
-        description = get_book_details(book_key)  # Fetch description immediately
-        publish_years = item.get('publish_year', [])
-        published_date = max(publish_years, default="No Date Available") if publish_years else "No Date Available"
-
+        description, publish_date = get_book_details(book_key)  # Fetch description and publish date immediately
         book_info = {
             'id': book_key.split('/')[-1],
             'title': item.get('title', 'No Title Available'),
             'authors': ", ".join(item.get('author_name', ['Unknown Author'])),
-            'published_date': published_date,
+            'published_date': publish_date,  # Using fetched publish date
             'categories': item.get('subject', ['No Genre Available']),
             'description': textwrap.fill(description, width=80),
             'link': f"https://openlibrary.org{book_key}"
